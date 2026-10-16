@@ -3457,6 +3457,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) {
         }
 #ifdef PULSE_WITH_SELFTEST
         wchar_t settings_interactions[32768]{};
+        wchar_t settings_scrollbar[32768]{};
+        if (state.isolatedTest && GetEnvironmentVariableW(L"PULSE_TEST_SETTINGS_SCROLLBAR", settings_scrollbar, ARRAYSIZE(settings_scrollbar))) {
+            extern int RunSettingsScrollbarTest(AppState&, const wchar_t*);
+            const int result = RunSettingsScrollbarTest(state, settings_scrollbar);
+            DestroyWindow(hwnd); OleUninitialize(); return result;
+        }
         wchar_t quicklook_settings[32768]{};
         if (state.isolatedTest && GetEnvironmentVariableW(L"PULSE_TEST_QUICKLOOK_SETTINGS", quicklook_settings, ARRAYSIZE(quicklook_settings))) {
             extern int RunQuickLookSettingsTest(AppState&, const wchar_t*);
