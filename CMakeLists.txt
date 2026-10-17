@@ -723,6 +723,7 @@ pulse_enable_lumatext(pulse_math_test)
 
 add_executable(pulse_shell_icons_test src/bench/shell_icons_test.cpp src/ui/shell_icons.cpp)
 target_link_libraries(pulse_shell_icons_test PRIVATE ole32 shell32 comctl32 uuid)
+add_executable(pulse_settings_search_index_test src/bench/settings_search_index_test.cpp src/app/settings_search_index.cpp)
 
 # Packaged (MSIX / sparse) File Explorer context-menu verbs (#48).
 add_executable(pulse_packaged_ctx_test src/bench/packaged_ctx_test.cpp

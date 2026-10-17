@@ -324,7 +324,8 @@ struct AppState : AppCoreOwner {
     HWND advancedCountHwnd = nullptr;
     bool paletteSearching = false;
 
-    unsigned settingsExpanded = ui::kSettingsDefaultExpandedMask;
+    unsigned settingsExpanded = 0;
+    uint32_t settingsCollapsed = (1u << static_cast<unsigned>(ui::SettingsSection::Count)) - 1;
     float scale = 1.0f;
     bool maximized = false;
     bool backdropActive = true;

@@ -66,6 +66,8 @@ int RunSettingsInteractionTest(AppState& s,const wchar_t* output) {
         PostThreadMessageW(GetCurrentThreadId(),WM_KEYDOWN,VK_RETURN,0);
     });
     H find;find.region=H::SettingsFind;HandleSettingsControl(s,find);
+    SetWindowTextW(GetFocus(), search_query.c_str());
+    SendMessageW(s.hwnd, RegisterWindowMessageW(L"Pulse.SettingsSearchChanged"), 0, 0);
     vm=BuildVm(s,false);
     log<<"search page="<<vm.settings_page<<" expanded="<<s.settingsExpanded<<" scroll="<<s.settings.scroll()<<std::endl;
     check(vm.settings_page==0 && (s.settingsExpanded&1u) && s.settings.scroll()>0,"settings search opens and scrolls to a hidden option");

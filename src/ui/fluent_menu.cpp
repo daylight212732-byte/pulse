@@ -2019,6 +2019,7 @@ int FluentMenu::TrackPopup(POINT screen_pt, std::vector<FluentMenuItem> items,
 void FluentMenu::RefreshFilter() {
     if (!filter_fn_ || !compositor_) return;
     auto items = filter_fn_(filter_query_);
+    if (!open_ || animating_out_) return; // Clearing the query may dismiss the popup.
     scroll_y_ = 0.0f;
     UpdateTooltip(-1);
     if (items.empty()) {

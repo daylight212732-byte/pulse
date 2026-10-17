@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cwctype>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 #include <wrl/client.h>
@@ -2040,7 +2041,17 @@ inline PulsePreviewLayout LayoutPulsePreview(const WindowViewModel& vm, const D2
     return l;
 }
 
+struct SettingsSectionLayout {
+    SettingsSection id;
+    D2D1_RECT_F header{}, body{};
+    std::wstring title;
+    bool inset = false;
+    bool collapsed = false;
+};
+
 struct SettingsLayout {
+    D2D1_RECT_F search{};
+    std::vector<SettingsSectionLayout> sections;
     // Rows of vm.settings_items; only Pulse's own commands (group 5) are laid
     // out. Windows and other software are managed on 系统右键菜单 (page 6).
     std::vector<D2D1_RECT_F> context_rows;
@@ -2240,6 +2251,7 @@ float ReleaseLineHeight(const fluent::Painter* painter, const std::wstring& line
 
 #include "settings_layout_sections.h"
 #include "settings_sysctx_layout.h"
+#include "settings_section_layout.h"
 
 
 fluent::ScrollbarSpec SettingsScrollbarSpec(const WindowViewModel& vm,
@@ -2264,6 +2276,9 @@ SettingsLayout MakeSettingsLayout(const WindowViewModel& vm, const D2D1_RECT_F& 
         rect.right - rect.left < 1000 * scale ? 200.0f : 220.0f) * scale;
     l.nav = D2D1::RectF(l.body.left, l.body.top, l.body.left + nav_width, l.body.bottom);
     l.content = D2D1::RectF(l.nav.right, l.body.top, l.body.right, l.body.bottom);
+    l.search = D2D1::RectF(l.content.left + 20*scale, l.content.top + 12*scale,
+                           l.content.right - 20*scale, l.content.top + 48*scale);
+    l.content.top += 60*scale;
     for (int i = 0; i < kSettingsNavCount; ++i) {
         // 系统右键菜单 (6) has no row of its own: the 右键菜单 (2) layer cards
         // switch between the two, see ctx_layer. 关于 (3) stays at the bottom.
@@ -2625,6 +2640,8 @@ SettingsLayout MakeSettingsLayout(const WindowViewModel& vm, const D2D1_RECT_F& 
         const float inner = 16.0f * scale;
         const float btn_h = 32.0f * scale;
         y += 40.0f * scale;
+        l.section[0] = D2D1::RectF(card_left, y, card_right, y + 28*scale);
+        y += 40*scale;
         const float options_top=y-12*scale;
         const float scope_w = (card_right - card_left - inner * 2 - gap * 2) / 3.0f;
         for (int i = 0; i < 3; ++i) {
@@ -2691,7 +2708,13 @@ SettingsLayout MakeSettingsLayout(const WindowViewModel& vm, const D2D1_RECT_F& 
                 card.top + 48.0f * scale +
                     static_cast<float>(vm.dup_groups[g].files.size()) * file_h + 8.0f * scale +
                     btn_h));
-            if (VisibleInContent(card, l.content, vis_pad)) {
+            auto visible_card = card;
+            if (!vm.dup_scanning && (vm.settings_collapsed & SettingsSectionBit(SettingsSection::DuplicateOptions))) {
+                const float hidden_height = l.duplicate_options.bottom - l.duplicate_options.top;
+                visible_card.top -= hidden_height;
+                visible_card.bottom -= hidden_height;
+            }
+            if (VisibleInContent(visible_card, l.content, vis_pad)) {
                 float fy = y + 48.0f * scale;
                 l.dup_keep.reserve(l.dup_keep.size() + vm.dup_groups[g].files.size());
                 l.dup_open.reserve(l.dup_open.size() + vm.dup_groups[g].files.size());
@@ -2718,6 +2741,7 @@ SettingsLayout MakeSettingsLayout(const WindowViewModel& vm, const D2D1_RECT_F& 
         }
     }
     l.content_h = y - l.content_origin + pad;
+    ApplySettingsSections(l, vm, scale);
     return l;
 }
 

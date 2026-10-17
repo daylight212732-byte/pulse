@@ -96,6 +96,15 @@ void MainRenderer::DrawSettings(const WindowViewModel& vm, const D2D1_RECT_F& re
                      rc.bottom - rc.top);
     }
 
+    fluent::TextFieldSpec search;
+    search.bounds = lay.search;
+    const auto placeholder = l10n::Get(l10n::StringId::SettingsFind);
+    search.placeholder = placeholder;
+    search.leading_glyph = L"\xE721";
+    search.trailing_keycap = L"Ctrl+F";
+    search.hosted_edit = true;
+    search.state.hovered = IsHovered(vm, HitTestResult::SettingsFind);
+    painter_.DrawTextField(search);
     dc->PushAxisAlignedClip(lay.content, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     const float pad = 20.0f * scale_;
     const float origin = lay.content_origin;
@@ -970,12 +979,16 @@ void MainRenderer::DrawSettings(const WindowViewModel& vm, const D2D1_RECT_F& re
             bar.animation_progress = vm.dup_animation;
             painter_.DrawProgressBar(bar);
         }
+        float options_bottom = lay.dup_scan.bottom;
+        for (const auto& section : lay.sections) {
+            if (section.id == SettingsSection::DuplicateOptions && section.collapsed) options_bottom = section.header.bottom;
+        }
         if (!vm.dup_empty.empty()) {
             MakeBrush(dc, theme.text_secondary, brTextSecondary_);
             DrawTextRect(dc, compositor_->SmallFormat(), brTextSecondary_.get(), vm.dup_empty,
                          lay.content.left + pad, lay.dup_progress.bottom > lay.dup_progress.top
                              ? lay.dup_progress.bottom + 8.0f * scale_
-                             : lay.dup_scan.bottom + 12.0f * scale_,
+                             : options_bottom + 12.0f * scale_,
                          lay.content.right - lay.content.left - pad * 2, 28.0f * scale_);
         }
         for (size_t g = 0; g < vm.dup_groups.size() && g < lay.dup_group_cards.size(); ++g) {
@@ -1037,9 +1050,36 @@ void MainRenderer::DrawSettings(const WindowViewModel& vm, const D2D1_RECT_F& re
                 fluent::ButtonKind::Primary, all});
         }
     }
+    for (const auto& section : lay.sections) {
+        const auto r = section.header;
+        const bool hot = IsHovered(vm, HitTestResult::SettingsSectionToggle, static_cast<int>(section.id));
+        if (section.inset && section.collapsed) {
+            MakeBrush(dc, theme.surface_card, brFillInput_);
+            FillRoundedRect(dc, brFillInput_.get(), r.left, r.top, r.right-r.left, r.bottom-r.top, 8*scale_);
+            painter_.DrawText(section.title, D2D1::RectF(r.left+16*scale_, r.top, r.right-42*scale_, r.bottom),
+                compositor_->TextFormat(), theme.text);
+        }
+        if (section.id == SettingsSection::DuplicateOptions) {
+            painter_.DrawText(l10n::Pick(L"扫描选项", L"Scan options"),
+                D2D1::RectF(r.left, r.top, r.right-42*scale_, r.bottom), compositor_->TextFormat(), theme.text);
+        }
+        auto arrow = D2D1::RectF(r.right-32*scale_, r.top, r.right, r.bottom);
+        if (hot) {
+            MakeBrush(dc, theme.fill_hover, brFillHover_);
+            FillRoundedRect(dc, brFillHover_.get(), arrow.left, arrow.top, arrow.right-arrow.left, arrow.bottom-arrow.top, 4*scale_);
+        }
+        DrawIconText(arrow.left, (r.top+r.bottom)/2-8*scale_, 24*scale_, 16*scale_,
+            section.collapsed ? L"\xE76C" : L"\xE70D", L"", theme.text_secondary, 0.75f);
+    }
     dc->PopAxisAlignedClip();
 
     painter_.DrawScrollbar(SettingsScrollbarSpec(vm, lay, scale_));
+}
+
+D2D1_RECT_F MainRenderer::SettingsSearchBounds(float window_w, float window_h) const {
+    WindowViewModel vm;
+    return MakeSettingsLayout(vm, D2D1::RectF(0, 0, window_w, window_h), scale_,
+        title_bar_height_, status_height_, &painter_).search;
 }
 
 bool MainRenderer::SettingsScrollbarGeometry(const WindowViewModel& vm, float window_w,
@@ -1119,6 +1159,8 @@ float MainRenderer::SettingsDestinationOffset(const WindowViewModel& vm, int set
     case I::LocalDrives: if(!l.index_volume_rows.empty()) target=l.index_volume_rows.front();break;
     case I::Exclusions: target=l.index_exclude_action;break;
     case I::ServerFolders: target=l.network_action[0];break;
+    case I::SettingsAboutDiagnostics: target=l.about_card;break;
+    case I::Diagnostics: target=l.diagnostics_card;break;
     case I::ReleaseNotes: target=l.release_card;break;
     case I::SettingsAutoUpdate: target=l.update_auto_row;break;
     default: return 0;

@@ -1,4 +1,5 @@
 #include "app_diagnostics.h"
+#include "settings_search_editor.h"
 #include "../common/windows_compat.h"
 #include "../ui/FluentTokens.h"
 #include "quick_access.h"
@@ -289,6 +290,7 @@ void Render(AppState& s) {
     if (!s.tagRenameId.empty()) LayoutTagRenameOverlay(s);
     if (s.addressEditing) LayoutAddressEditor(s);
     if (s.filterEditing) LayoutFilterEditor(s);
+    LayoutSettingsSearchEditor(s);
     SyncShellWindows(s);
 
     if (s.shot.active && !s.timing.first_frame_recorded) {
@@ -3479,6 +3481,25 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int nCmdShow) {
             extern int RunSettingsInteractionTest(AppState&,const wchar_t*);
             const int result=RunSettingsInteractionTest(state,settings_interactions);
             DestroyWindow(hwnd);OleUninitialize();return result;
+        }
+        const DWORD settings_sections_length = state.isolatedTest
+            ? GetEnvironmentVariableW(L"PULSE_TEST_SETTINGS_SECTIONS_SEARCH", nullptr, 0) : 0;
+        if (settings_sections_length > 0) {
+            // This test-only path must not reserve a 64 KB stack buffer during
+            // normal runs, where nested window messages share the main stack.
+            std::wstring settings_sections(settings_sections_length, L'\0');
+            const DWORD length = GetEnvironmentVariableW(L"PULSE_TEST_SETTINGS_SECTIONS_SEARCH",
+                settings_sections.data(), settings_sections_length);
+            if (length == 0 || length >= settings_sections_length) {
+                DestroyWindow(hwnd); OleUninitialize(); return 4;
+            }
+            settings_sections.resize(length);
+            extern int RunSettingsSectionsSearchTest(AppState&, const wchar_t*);
+            extern int RunSettingsWindowMessagesTest(AppState&, const wchar_t*);
+            const int result = GetEnvironmentVariableW(L"PULSE_TEST_SETTINGS_WINDOW_MESSAGES", nullptr, 0)
+                ? RunSettingsWindowMessagesTest(state, settings_sections.c_str())
+                : RunSettingsSectionsSearchTest(state, settings_sections.c_str());
+            DestroyWindow(hwnd); OleUninitialize(); return result;
         }
         wchar_t settings_flow[32768]{};
         if (state.isolatedTest && GetEnvironmentVariableW(L"PULSE_TEST_SETTINGS_FLOW",settings_flow,ARRAYSIZE(settings_flow))) {

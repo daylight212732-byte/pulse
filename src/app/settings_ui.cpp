@@ -7,6 +7,8 @@
 #include "../ui/folder_picker_dialog.h"
 #include "../common/preview_packs.h"
 #include "system_ctx_model.h"
+#include "settings_search_index.h"
+#include "settings_search_editor.h"
 #include <shellapi.h>
 #include <shlobj.h>
 #include <algorithm>
@@ -47,23 +49,54 @@ int Dropdown(AppState& s, int index, std::vector<ui::FluentMenuItem> items) {
 }
 struct SettingDestination { I title;int page;unsigned expanded; };
 constexpr SettingDestination destinations[]={
-    {I::SettingsTheme,0,0},{I::SettingsThemeColor,0,0},{I::SettingsWindowEffect,0,0},{I::MenuAcrylic,0,0},{I::SettingsLanguage,0,0},{I::SettingsTextRender,0,0},{I::SettingsUiFontSize,0,0},
+    {I::SettingsTheme,0,0},{I::SettingsThemeColor,0,0},{I::SettingsWindowEffect,0,0},{I::MenuAcrylic,0,0},{I::SettingsLanguage,0,0},{I::SettingsUiFontSize,0,0},{I::SettingsTextRender,0,0},
     {I::SettingsIntegration,0,0},{I::SettingsDefaultManager,0,0},{I::SettingsLaunch,0,0},{I::SettingsStartInTray,0,0},{I::SettingsKeepRunning,0,0},{I::SettingsNotifyIcon,0,0},
     {I::SettingsHomeFolder,0,0},{I::SettingsStartupOpen,0,0},{I::SettingsNewTabOpen,0,0},{I::SettingsExternalOpen,0,0},{I::SettingsCloseLastTab,0,0},{I::SettingsCloseTabDoubleClick,0,0},{I::SettingsRowHeight,0,0},{I::SettingsShowPerformance,0,0},
     {I::ListSmartDate,0,0},{I::ListZebraRows,0,0},{I::ListSizeBar,0,0},{I::ListTagNameColor,0,0},{I::ListSelectionOutline,0,0},{I::ListThumbnailBadges,0,0},{I::SettingsFolderSort,0,0},{I::SettingsConfirmDelete,0,0},
     {I::SettingsWallpaper,0,1},{I::SettingsWallpaperLook,0,1},{I::SettingsWallpaperBlur,0,1},{I::SettingsTrayIcon,0,1},{I::SettingsShowHidden,0,1},{I::SettingsShowProtected,0,1},{I::PinnedNames,0,1},{I::SettingsVerticalTabs,0,1},{I::SettingsHints,0,1},{I::SettingsHintsReset,0,1},
     {I::SettingsBlankClickBack,0,1},{I::SettingsChangeTracking,0,1},{I::SettingsOpenFolders,0,0},{I::SettingsWinE,0,0},{I::SettingsThisPc,0,0},{I::SettingsRecycleBin,0,0},{I::SettingsExplorerWindows,0,0},{I::SettingsShellTags,0,1},
     {I::GlobalSearch,1,0},{I::GlobalSearchHotkey,1,0},{I::SearchPinyin,1,0},{I::ContentIndexManage,1,0},{I::IndexLocation,1,2},{I::LocalDrives,1,2},
-    {I::Exclusions,1,2},{I::ServerFolders,1,2},{I::SettingsContextMenu,2,0},{I::SettingsDuplicates,4,0},{I::QuickPreview,5,4},{I::SettingsAboutDiagnostics,3,0},{I::SettingsAutoUpdate,3,0},
+    {I::Exclusions,1,2},{I::ServerFolders,1,2},{I::SettingsContextMenu,2,0},{I::SettingsDuplicates,4,0},{I::QuickPreview,5,4},{I::SettingsAboutDiagnostics,3,0},{I::Diagnostics,3,0},{I::SettingsAutoUpdate,3,0},
 };
+uint32_t DestinationSection(const SettingDestination& target) {
+    using S = ui::SettingsSection;
+    const auto bit = [](S section) { return ui::SettingsSectionBit(section); };
+    if (target.page == 0) {
+        switch (target.title) {
+        case I::SettingsTheme: case I::SettingsThemeColor: case I::SettingsWindowEffect:
+        case I::MenuAcrylic: case I::SettingsLanguage: case I::SettingsTextRender: case I::SettingsUiFontSize:
+            return bit(S::Appearance);
+        case I::SettingsIntegration: case I::SettingsDefaultManager: case I::SettingsOpenFolders:
+        case I::SettingsWinE: case I::SettingsThisPc: case I::SettingsRecycleBin: case I::SettingsExplorerWindows:
+            return bit(S::Integration);
+        case I::SettingsLaunch: case I::SettingsStartInTray: case I::SettingsKeepRunning:
+        case I::SettingsNotifyIcon: case I::SettingsHomeFolder: case I::SettingsStartupOpen:
+        case I::SettingsNewTabOpen: case I::SettingsExternalOpen: case I::SettingsCloseLastTab: case I::SettingsCloseTabDoubleClick:
+            return bit(S::Startup);
+        default: return target.expanded ? 0 : bit(S::FileList);
+        }
+    }
+    if (target.page == 1)
+        return bit(target.title == I::ContentIndexManage ? S::ContentSearch : S::FilenameSearch);
+    if (target.page == 2) return bit(S::PulseMenu);
+    if (target.page == 3) return bit(target.title == I::SettingsAutoUpdate ? S::Updates :
+        target.title == I::Diagnostics ? S::Diagnostics : S::About);
+    if (target.page == 4) return bit(S::DuplicateOptions);
+    if (target.page == 5) return bit(S::PreviewTrigger) | bit(S::PreviewSystem) | bit(S::MediaPack) |
+        bit(S::ImagePacks) | bit(S::ArchivePack) | bit(S::PreviewAdvanced);
+    return 0;
+}
 std::vector<ui::FluentMenuItem> FilterSettings(const std::wstring& query) {
-    std::wstring needle=query;std::transform(needle.begin(),needle.end(),needle.begin(),towlower);
     std::vector<ui::FluentMenuItem> items;
+    if (std::all_of(query.begin(), query.end(), [](wchar_t ch) { return std::iswspace(ch) != 0; })) {
+        return items;
+    }
+    std::vector<std::pair<int, ui::FluentMenuItem>> ranked;
     const I pages[]={I::SettingsGeneral,I::SettingsSearchIndex,I::SettingsContextMenu,I::SettingsAboutDiagnostics,I::SettingsDuplicates,I::QuickPreview};
     for(size_t i=0;i<std::size(destinations);++i) {
         auto item=Item(static_cast<int>(i)+1,destinations[i].title);
         item.shortcut=l10n::Get(pages[destinations[i].page]);
-        std::wstring haystack=item.text+L" "+item.shortcut;
+        std::wstring alias_text(app::SettingsSearchAliases(destinations[i].title));
         if (destinations[i].page == 5) {
             // Translate each visible heading separately: the Traditional Chinese
             // phrase table deliberately does not translate unknown concatenations.
@@ -74,32 +107,68 @@ std::vector<ui::FluentMenuItem> FilterSettings(const std::wstring& query) {
                 l10n::Pick(L"现代图像格式", L"Modern image formats"),
                 l10n::Pick(L"RAW 相机照片", L"RAW camera photos"),
                 l10n::Pick(L"压缩包", L"Archives")};
-            for (const auto& alias : aliases) haystack += L" " + alias;
+            for (const auto& alias : aliases) {
+                // Preview's section labels are indexed alongside its page destination.
+                item.shortcut += L" ";
+                item.shortcut += alias;
+            }
         }
-        std::transform(haystack.begin(),haystack.end(),haystack.begin(),towlower);
-        if(needle.empty() || haystack.find(needle)!=std::wstring::npos) items.push_back(std::move(item));
+        const int score = app::SettingsSearchScore(query, item.text, item.shortcut, alias_text);
+        item.shortcut = l10n::Get(pages[destinations[i].page]);
+        if (score >= 0) ranked.emplace_back(score, std::move(item));
     }
+    std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    for (auto& entry : ranked) items.push_back(std::move(entry.second));
     if(items.empty()) {auto item=Item(0,I::SettingsNoMatches);item.enabled=false;items.push_back(std::move(item));}
     return items;
 }
-void FindSetting(AppState& s) {
-    if(!EnsureMenu(s)) return;
+bool FindSettingMatches(AppState& s, const std::wstring& query, HWND edit) {
+    // Popup dismissal can dispatch another owner-window click before its
+    // modal loop returns. Do not reopen the shared menu on that call stack.
+    static thread_local bool search_active = false;
+    if (search_active) return false;
+    search_active = true;
+    struct SearchScope {
+        bool& active;
+        ~SearchScope() { active = false; }
+    } search_scope{search_active};
+    if(!EnsureMenu(s)) return false;
     s.menu->SetTheme(s.darkMode,s.accentColor);
     s.menu->SetFilterPlaceholder(l10n::Get(I::SettingsFind));
-    s.menu->SetFilterMinWidth(420);
-    POINT pt{static_cast<LONG>(s.compositor.Width()/2),static_cast<LONG>(s.renderer.TitleBarHeight()+20*s.scale)};
-    ClientToScreen(s.hwnd,&pt);
-    const int command=s.menu->TrackPopup(pt,FilterSettings(L""),FilterSettings,true);
+    const auto search = s.renderer.SettingsSearchBounds(static_cast<float>(s.compositor.Width()),
+        static_cast<float>(s.compositor.Height()));
+    POINT corners[] = {{static_cast<LONG>(std::lround(search.left)), static_cast<LONG>(std::lround(search.top))},
+                       {static_cast<LONG>(std::lround(search.right)), static_cast<LONG>(std::lround(search.bottom))}};
+    MapWindowPoints(s.hwnd, nullptr, corners, 2);
+    s.menu->SetAnchorRect({corners[0].x, corners[0].y, corners[1].x, corners[1].y});
+    s.menu->SetFilterMinWidth((search.right - search.left)/s.scale);
+    s.menu->SetMaxVisibleRows(6);
+    s.menu->SetExternalFilterEdit(edit);
+    s.menu->SetInitialFilterText(query);
+    auto filter = [&s](const std::wstring& text) {
+        auto items = FilterSettings(text);
+        if (items.empty()) s.menu->Dismiss();
+        return items;
+    };
+    const int command=s.menu->TrackPopup(corners[0],FilterSettings(query),filter);
     s.menu->SetFilterPlaceholder(L"");
     if(command>0 && command<=static_cast<int>(std::size(destinations))) {
         const auto& target=destinations[command-1];
         OpenSettingsTab(s,target.page);s.settingsExpanded|=target.expanded;
+        s.settingsCollapsed &= ~DestinationSection(target);
         // Scroll to the selected setting using the renderer's shared layout.
         auto vm=BuildVm(s,false);
         const float offset=s.renderer.SettingsDestinationOffset(vm,static_cast<int>(target.title),static_cast<float>(s.compositor.Width()),static_cast<float>(s.compositor.Height()));
         const float maximum=s.renderer.SettingsMaxScroll(vm,static_cast<float>(s.compositor.Width()),static_cast<float>(s.compositor.Height()));
         s.settings.SetScroll(offset,maximum);
+        return true;
     }
+    return false;
+}
+void FindSetting(AppState& s) {
+    FocusSettingsSearchEditor(s, [&s](const std::wstring& query, HWND edit) {
+        return FindSettingMatches(s, query, edit);
+    });
 }
 void ContentOptions(AppState& s) {
     auto config = s.contentSearch.GetConfig();
@@ -255,6 +324,14 @@ bool TestSettingsFilter(const std::wstring& query,I expected) {
 bool HandleSettingsControl(AppState& s,const H& hit) {
     switch(hit.region) {
     case H::SettingsFind: FindSetting(s);break;
+    case H::SettingsSectionToggle: {
+        if (hit.index < 0 || hit.index >= static_cast<int>(ui::SettingsSection::Count)) return true;
+        s.settingsCollapsed ^= 1u << hit.index;
+        const auto vm = BuildVm(s, false);
+        s.settings.SetScroll(s.settings.scroll(), s.renderer.SettingsMaxScroll(vm,
+            static_cast<float>(s.compositor.Width()), static_cast<float>(s.compositor.Height())));
+        break;
+    }
     case H::SettingsToggle: {
         // Pulse menu preview: pressing a movable row arms a drag (app_input
         // follows the pointer and drops); the fixed rows do nothing.

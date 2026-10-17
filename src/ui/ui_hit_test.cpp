@@ -234,12 +234,22 @@ HitTestResult MainRenderer::HitTest(const WindowViewModel& vm, const D2D1_RECT_F
                 return r;
             }
         }
+        if (ContainsPt(lay.search, x, y)) { r.region = HitTestResult::SettingsFind; return r; }
         if (ContainsPt(lay.content, x, y)) {
             const auto bar = SettingsScrollbarSpec(vm, lay, scale_);
             if (bar.enabled && ContainsPt(bar.viewport, x, y)) {
                 r.region = HitTestResult::Scrollbar;
                 r.sub_index = 3; // Settings content, independent of the file pane.
                 return r;
+            }
+            for (const auto& section : lay.sections) {
+                auto toggle = section.header;
+                if (section.inset && !section.collapsed) toggle.left = toggle.right - 32*scale_;
+                if (ContainsPt(toggle, x, y)) {
+                    r.region = HitTestResult::SettingsSectionToggle;
+                    r.index = static_cast<int>(section.id);
+                    return r;
+                }
             }
             // 右键菜单 layer card 系统右键菜单 (the Pulse card is the current page).
             if (ContainsPt(lay.ctx_layer[1], x, y)) {

@@ -490,6 +490,7 @@ void FillPaneSlots(AppState& s, ui::WindowViewModel& vm) {
             vm.settings_global_search_error = s.settings.global_search_error();
             vm.settings_content_status = ContentIndexStatusText(s);
             vm.settings_expanded = s.settingsExpanded;
+            vm.settings_collapsed = s.settingsCollapsed;
             if (vm.settings_page == 5) vm.settings_preview_codecs = ui::DetectPreviewCodecs(false, s.hwnd);
             if (vm.settings_page == 6) {
                 // 系统右键菜单: the first visit starts a background scan.
@@ -2701,6 +2702,7 @@ std::wstring TooltipForHover(AppState& s) {
     case R::ThemeToggle: return text(I::TooltipToggleTheme);
     case R::SettingsButton: return text(I::Settings);
     case R::SettingsFind: return text(I::SettingsFind);
+    case R::SettingsSectionToggle: return l10n::Pick(L"展开或收起分组", L"Expand or collapse section");
     case R::SettingsNav: {
         if (s.hoverControlIndex == 5) return l10n::Pick(L"快速预览", L"Quick Look");
         if (s.hoverControlIndex == 2) return l10n::Pick(L"右键菜单", L"Context menu");  // one entry for both pages

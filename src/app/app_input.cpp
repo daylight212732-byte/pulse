@@ -4192,7 +4192,11 @@ LRESULT HandleKeyDown(AppState* s, HWND hwnd, UINT msg, WPARAM wParam, LPARAM lP
         } else if (ctrl && shift && wParam == L'F') {
             ShowAdvancedSearch(*s);
         } else if (ctrl && wParam == L'F') {
-            if (IsAddressSearchResults(tab)) ShowAddressSearch(*s);
+            if (IsSettingsTab(tab)) {
+                ui::HitTestResult find;
+                find.region = ui::HitTestResult::SettingsFind;
+                HandleSettingsControl(*s, find);
+            } else if (IsAddressSearchResults(tab)) ShowAddressSearch(*s);
             else ShowFilterEditor(*s);
         } else if (wParam == VK_F6) {
             CycleFocus(*s);

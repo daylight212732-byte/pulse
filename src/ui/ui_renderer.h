@@ -16,6 +16,7 @@
 #include "thumbnail_cache.h"
 #include "folder_thumbnail_cache.h"
 #include "render_caches.h"
+#include "settings_sections.h"
 #include "archive_preview.h"
 #include "name_highlight.h"
 #include "preview_handler_host.h"
@@ -810,6 +811,7 @@ struct WindowViewModel {
     bool settings_content_paused = false;
     bool settings_content_instant = false;
     unsigned settings_expanded = kSettingsDefaultExpandedMask;
+    uint32_t settings_collapsed = 0;
     unsigned settings_preview_codecs = 0;  // DetectPreviewCodecs() mask, General page only
     // Settings > 预览增强包 (page 5), from SettingsController's cached pack state.
     uint32_t settings_pack_ffmpeg = 0;          // 0 none, 1 pack installed, 2 own FFmpeg in use
@@ -1017,7 +1019,7 @@ struct HitTestResult {
         NetworkIndexAdd,
         PaneBannerButton,         // index = ui::PaneBannerAction
         SettingsContentIndex,
-        SettingsFind, SettingsDisclosure, SettingsTheme, SettingsDropdown,
+        SettingsFind, SettingsSectionToggle, SettingsDisclosure, SettingsTheme, SettingsDropdown,
         SettingsContentAction,
         AddressSearchClear,
         AddressSearchClose,
@@ -1653,6 +1655,7 @@ public:
     float SidebarMaxScroll(const WindowViewModel& vm, float window_w, float window_h) const;
     bool SettingsScrollbarGeometry(const WindowViewModel& vm, float window_w, float window_h,
                                    D2D1_RECT_F& track, D2D1_RECT_F& thumb, float& max_scroll) const;
+    D2D1_RECT_F SettingsSearchBounds(float window_w, float window_h) const;
     bool SidebarScrollbarGeometry(const WindowViewModel& vm, float window_w, float window_h,
                                   D2D1_RECT_F& track, D2D1_RECT_F& thumb, float& max_scroll) const;
     // How many deck cards the tray panel fits at the current sidebar width
